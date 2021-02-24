@@ -1,5 +1,6 @@
 package com.amit.mvpexample.views.activities;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -24,6 +25,14 @@ public class MainActivity extends AppCompatActivity implements UserContract.View
     private RecyclerView rvUsersList;
     private UserPresenter userPresenter;
     private ProgressDialog progressDialog;
+    private UserListAdapter userListAdapter;
+    private LinearLayoutManager linearLayoutManager;
+
+    private ArrayList<User> mUserArrayList;
+
+    private boolean isLoading = true;
+    private final int visibleThreshold = 6;
+    private int pageNo = 1, previousTotal = 0, firstVisibleItem, visibleItemCount, totalItemCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -33,19 +42,75 @@ public class MainActivity extends AppCompatActivity implements UserContract.View
 
         // calling init activity
         initActivity();
+
+        // calling event listener method
+        eventListener();
     }
 
     private void initActivity()
     {
         try
         {
+            mUserArrayList = new ArrayList<>();
             rvUsersList = findViewById(R.id.rvUsersList);
             userPresenter = new UserPresenter(MainActivity.this);
-            userPresenter.requestUsersListFromServer(1);
+            userPresenter.requestUsersListFromServer(pageNo);
+
+            userListAdapter = new UserListAdapter(mUserArrayList);
+            linearLayoutManager = new LinearLayoutManager(MainActivity.this, RecyclerView.VERTICAL, false);
+
+            rvUsersList.setLayoutManager(linearLayoutManager);
+            rvUsersList.setAdapter(userListAdapter);
         }
         catch (Exception e)
         {
             Log.e(TAG, "initActivity: exception while initializing activity");
+        }
+    }
+
+    private void eventListener()
+    {
+        try
+        {
+            rvUsersList.addOnScrollListener(new RecyclerView.OnScrollListener()
+            {
+                @Override
+                public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState)
+                {
+                    super.onScrollStateChanged(recyclerView, newState);
+                }
+
+                @Override
+                public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy)
+                {
+                    super.onScrolled(recyclerView, dx, dy);
+
+                    visibleItemCount = rvUsersList.getChildCount();
+                    totalItemCount = linearLayoutManager.getItemCount();
+                    firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
+
+                    // Handling the infinite scroll
+                    if (isLoading)
+                    {
+                        if (totalItemCount > previousTotal)
+                        {
+                            isLoading = false;
+                            previousTotal = totalItemCount;
+                        }
+                    }
+
+                    if (!isLoading && (totalItemCount - visibleItemCount) <= (firstVisibleItem + visibleThreshold))
+                    {
+                        userPresenter.requestUsersListFromServer(pageNo);
+                        isLoading = true;
+                    }
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "eventListener: exception while setting recycler view scroll listener:\n");
+            e.printStackTrace();
         }
     }
 
@@ -77,12 +142,10 @@ public class MainActivity extends AppCompatActivity implements UserContract.View
         {
             Log.e(TAG, "showUsersList: size of users array list is: " + userArrayList.size());
 
-            UserListAdapter userListAdapter = new UserListAdapter(userArrayList);
-            LinearLayoutManager linearLayoutManager = new LinearLayoutManager(MainActivity.this, RecyclerView.VERTICAL, false);
+            mUserArrayList.addAll(userArrayList);
+            userListAdapter.notifyDataSetChanged();
 
-            rvUsersList.setLayoutManager(linearLayoutManager);
-            rvUsersList.setAdapter(userListAdapter);
-            rvUsersList.setVisibility(View.VISIBLE);
+            pageNo++;
         }
     }
 
